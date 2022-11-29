@@ -1,4 +1,4 @@
-module github.com/matrixorigin/matrixone-operator/runtime
+module github.com/matrixorigin/controller-runtime
 
 go 1.18
 

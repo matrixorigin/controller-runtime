@@ -33,7 +33,7 @@ import (
 	recon "sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	"github.com/go-logr/logr"
-	"github.com/matrixorigin/matrixone-operator/runtime/pkg/util"
+	"github.com/matrixorigin/controller-runtime/pkg/util"
 	"github.com/pkg/errors"
 )
 

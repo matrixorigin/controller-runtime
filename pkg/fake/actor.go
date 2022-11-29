@@ -16,7 +16,7 @@ package fake
 import (
 	"context"
 	"github.com/go-logr/logr"
-	recon "github.com/matrixorigin/matrixone-operator/runtime/pkg/reconciler"
+	recon "github.com/matrixorigin/controller-runtime/pkg/reconciler"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	kubefake "sigs.k8s.io/controller-runtime/pkg/client/fake"
 )

@@ -18,7 +18,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/go-logr/logr"
-	"github.com/matrixorigin/matrixone-operator/runtime/pkg/reconciler"
+	"github.com/matrixorigin/controller-runtime/pkg/reconciler"
 	"github.com/prometheus/client_golang/prometheus"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
