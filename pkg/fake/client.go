@@ -55,9 +55,9 @@ func (c *Client) RESTMapper() meta.RESTMapper {
 
 func (c *Client) Get(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
 	if c.MockGet != nil {
-		return c.MockGet(ctx, key, obj)
+		return c.MockGet(ctx, key, obj, opts...)
 	}
-	return c.Client.Get(ctx, key, obj)
+	return c.Client.Get(ctx, key, obj, opts...)
 }
 
 func (c *Client) List(ctx context.Context, list client.ObjectList, opts ...client.ListOption) error {
@@ -99,7 +99,7 @@ func (c *Client) Patch(ctx context.Context, obj client.Object, patch client.Patc
 	return c.MockPatch(ctx, obj, patch, opts...)
 }
 
-type MockGetFn func(ctx context.Context, key client.ObjectKey, obj runtime.Object) error
+type MockGetFn func(ctx context.Context, key client.ObjectKey, obj runtime.Object, opts ...client.GetOption) error
 
 type MockListFn func(ctx context.Context, list runtime.Object, opts ...client.ListOption) error
 
@@ -120,7 +120,7 @@ type MockStatusPatchFn func(ctx context.Context, obj runtime.Object, patch clien
 type ObjectFn func(obj runtime.Object) error
 
 func NewMockGetFn(err error, ofn ...ObjectFn) MockGetFn {
-	return func(_ context.Context, _ client.ObjectKey, obj runtime.Object) error {
+	return func(_ context.Context, _ client.ObjectKey, obj runtime.Object, _ ...client.GetOption) error {
 		for _, fn := range ofn {
 			if err := fn(obj); err != nil {
 				return err
