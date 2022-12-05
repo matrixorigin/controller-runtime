@@ -14,6 +14,7 @@
 package reconciler
 
 import (
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -54,6 +55,27 @@ func (od *ObjectDependency[T]) IsReady(kubeCli KubeClient) (bool, error) {
 type Conditional interface {
 	SetCondition(c metav1.Condition)
 	GetConditions() []metav1.Condition
+}
+
+type ConditionalStatus struct {
+	Conditions []metav1.Condition `json:"conditions,omitempty"`
+}
+
+func (c *ConditionalStatus) SetCondition(condition metav1.Condition) {
+	if c.Conditions == nil {
+		c.Conditions = []metav1.Condition{}
+	}
+	if condition.Reason == "" {
+		condition.Reason = "empty"
+	}
+	meta.SetStatusCondition(&c.Conditions, condition)
+}
+
+func (c *ConditionalStatus) GetConditions() []metav1.Condition {
+	if c == nil {
+		return nil
+	}
+	return c.Conditions
 }
 
 func GetCondition(c Conditional, conditionType ConditionType) (*metav1.Condition, bool) {
