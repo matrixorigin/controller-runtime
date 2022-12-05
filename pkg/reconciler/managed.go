@@ -61,6 +61,26 @@ type ConditionalStatus struct {
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }
 
+func (in *ConditionalStatus) DeepCopyInto(out *ConditionalStatus) {
+	*out = *in
+	if in.Conditions != nil {
+		in, out := &in.Conditions, &out.Conditions
+		*out = make([]metav1.Condition, len(*in))
+		for i := range *in {
+			(*in)[i].DeepCopyInto(&(*out)[i])
+		}
+	}
+}
+
+func (in *ConditionalStatus) DeepCopy() *ConditionalStatus {
+	if in == nil {
+		return nil
+	}
+	out := new(ConditionalStatus)
+	in.DeepCopyInto(out)
+	return out
+}
+
 func (c *ConditionalStatus) SetCondition(condition metav1.Condition) {
 	if c.Conditions == nil {
 		c.Conditions = []metav1.Condition{}
