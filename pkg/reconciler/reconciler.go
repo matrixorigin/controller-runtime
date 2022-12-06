@@ -80,6 +80,8 @@ type options struct {
 	logger   logr.Logger
 	buildFn  func(*builder.Builder)
 	ctrlOpts controller.Options
+	// skipFinalizer indicates the reconciler can skip processing finalizer
+	skipFinalizer bool
 }
 
 type ApplyOption func(*options)
@@ -102,6 +104,10 @@ func WithControllerOptions(opts controller.Options) ApplyOption {
 // WithBuildFn allows customizing reconciler.Builder defined the controller-runtime
 func WithBuildFn(buildFn func(*builder.Builder)) ApplyOption {
 	return func(o *options) { o.buildFn = buildFn }
+}
+
+func SkipFinalizer() ApplyOption {
+	return func(o *options) { o.skipFinalizer = true }
 }
 
 // Setup register a kubernetes reconciler to the resource kind defined by T.
@@ -348,6 +354,9 @@ func (c *Reconciler[T]) removeFinalizer(ctx *Context[T], obj T) error {
 }
 
 func (c *Reconciler[T]) ensureFinalizer(ctx *Context[T], obj T) error {
+	if c.skipFinalizer {
+		return nil
+	}
 	if controllerutil.AddFinalizer(obj, c.finalizer()) {
 		return ctx.Update(obj)
 	}
