@@ -2,14 +2,19 @@ package observer
 
 import (
 	recon "github.com/matrixorigin/controller-runtime/pkg/reconciler"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
+
+func Setup[T client.Object](tpl T, name string, mgr ctrl.Manager, observer Observer[T], applyOpts ...recon.ApplyOption) error {
+	return recon.Setup(tpl, name, mgr, asActor(observer), applyOpts...)
+}
 
 type Observer[T client.Object] interface {
 	Observe(*recon.Context[T]) error
 }
 
-func AsActor[T client.Object](o Observer[T]) recon.Actor[T] {
+func asActor[T client.Object](o Observer[T]) recon.Actor[T] {
 	return &observerActor[T]{observer: o}
 }
 
