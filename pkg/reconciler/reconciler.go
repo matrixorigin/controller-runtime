@@ -206,7 +206,6 @@ func (r *Reconciler[T]) Reconcile(goCtx context.Context, req recon.Request) (rec
 
 	action, err := r.actor.Observe(ctx)
 	if err != nil {
-		ctx.Log.Info("observe error", "error", err)
 		return r.processActorError(ctx, err)
 	}
 
