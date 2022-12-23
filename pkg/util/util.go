@@ -29,6 +29,9 @@ const (
 )
 
 func Ignore(isErr func(error) bool, err error) error {
+	if err == nil {
+		return nil
+	}
 	if isErr(err) {
 		return nil
 	}
@@ -94,8 +97,34 @@ func FieldRefEnv(key string, field string) corev1.EnvVar {
 	}
 }
 
-// UpsertByKey insert an element to the list or update an existing element in list with same key.
-// UpsertByKey assumes the no duplicate key and will only update the first element with the same key if
+// UpsertListByKey insert a list to the list or update an existing element in list with same Key.
+// UpsertListByKey assumes the no duplicate Key and will only update the first element with the same Key if
+// there are duplicate keys in the list.
+func UpsertListByKey[K comparable, V any](targetList []V, elemList []V, keyFunc func(V) K) []V {
+	elemMap := map[K]V{}
+	for _, elem := range elemList {
+		elemMap[keyFunc(elem)] = elem
+	}
+	for i, v := range targetList {
+		key := keyFunc(v)
+		// if a new Value with the same Key is provided in the elemList, update the original Value by Key
+		if updated, ok := elemMap[key]; ok {
+			targetList[i] = updated
+			delete(elemMap, key)
+		}
+	}
+	// for keys that did not exist in the targetList (not deleted one), append them, keep original order
+	for _, elem := range elemList {
+		key := keyFunc(elem)
+		if inserted, ok := elemMap[key]; ok {
+			targetList = append(targetList, inserted)
+		}
+	}
+	return targetList
+}
+
+// UpsertByKey insert an element to the list or update an existing element in list with same Key.
+// UpsertByKey assumes the no duplicate Key and will only update the first element with the same Key if
 // there are duplicate keys in the list.
 func UpsertByKey[K comparable, V any](list []V, elem V, keyFunc func(V) K) []V {
 	for i, o := range list {
