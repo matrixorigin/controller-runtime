@@ -42,7 +42,7 @@ type KubeClient interface {
 	CreateOwned(obj client.Object, opts ...client.CreateOption) error
 	Get(objKey client.ObjectKey, obj client.Object) error
 	Update(obj client.Object, opts ...client.UpdateOption) error
-	UpdateStatus(obj client.Object, opts ...client.UpdateOption) error
+	UpdateStatus(obj client.Object, opts ...client.SubResourceUpdateOption) error
 	Delete(obj client.Object, opts ...client.DeleteOption) error
 	List(objList client.ObjectList, opts ...client.ListOption) error
 	Patch(obj client.Object, mutateFn func() error, opts ...client.PatchOption) error
@@ -80,7 +80,7 @@ func (c *Context[T]) Update(obj client.Object, opts ...client.UpdateOption) erro
 }
 
 // UpdateStatus update the status of the given obj
-func (c *Context[T]) UpdateStatus(obj client.Object, opts ...client.UpdateOption) error {
+func (c *Context[T]) UpdateStatus(obj client.Object, opts ...client.SubResourceUpdateOption) error {
 	return c.Client.Status().Update(c, obj, opts...)
 }
 
