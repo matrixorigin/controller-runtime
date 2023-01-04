@@ -82,6 +82,8 @@ type options struct {
 	ctrlOpts controller.Options
 	// skipFinalizer indicates the reconciler can skip processing finalizer
 	skipFinalizer bool
+	// skipStatusSync indicates the reconciler can skip sync status
+	skipStatusSync bool
 }
 
 type ApplyOption func(*options)
@@ -108,6 +110,10 @@ func WithBuildFn(buildFn func(*builder.Builder)) ApplyOption {
 
 func SkipFinalizer() ApplyOption {
 	return func(o *options) { o.skipFinalizer = true }
+}
+
+func SkipStatusSync() ApplyOption {
+	return func(o *options) { o.skipStatusSync = true }
 }
 
 // Setup register a kubernetes reconciler to the resource kind defined by T.
@@ -220,7 +226,7 @@ func (r *Reconciler[T]) Reconcile(goCtx context.Context, req recon.Request) (rec
 		if isConditional {
 			cond.SetCondition(synced(true))
 		}
-		if err := ctx.UpdateStatus(obj); err != nil {
+		if err := r.updateStatus(ctx); err != nil {
 			return none, err
 		}
 		return forget, nil
@@ -229,7 +235,7 @@ func (r *Reconciler[T]) Reconcile(goCtx context.Context, req recon.Request) (rec
 	if isConditional {
 		cond.SetCondition(synced(false))
 	}
-	if err := ctx.UpdateStatus(ctx.Obj); err != nil {
+	if err := r.updateStatus(ctx); err != nil {
 		return none, err
 	}
 
@@ -239,6 +245,13 @@ func (r *Reconciler[T]) Reconcile(goCtx context.Context, req recon.Request) (rec
 	}
 	// Always requeue after a successful action to check what should be done next
 	return requeue, nil
+}
+
+func (r *Reconciler[T]) updateStatus(ctx *Context[T]) error {
+	if r.skipStatusSync {
+		return nil
+	}
+	return ctx.UpdateStatus(ctx.Obj)
 }
 
 func (r *Reconciler[T]) processActorError(ctx *Context[T], err error) (recon.Result, error) {
@@ -251,7 +264,7 @@ func (r *Reconciler[T]) processActorError(ctx *Context[T], err error) (recon.Res
 			Message: fmt.Sprintf("Last error: %s", err.Error()),
 		})
 	}
-	if err := ctx.UpdateStatus(ctx.Obj); err != nil {
+	if err := r.updateStatus(ctx); err != nil {
 		return none, err
 	}
 
