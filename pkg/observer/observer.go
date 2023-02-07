@@ -8,7 +8,7 @@ import (
 
 func Setup[T client.Object](tpl T, name string, mgr ctrl.Manager, observer Observer[T], applyOpts ...recon.ApplyOption) error {
 	// Observer does not do finalize, also it can skip finalizer by default
-	return recon.Setup(tpl, name, mgr, asActor(observer), append(applyOpts, recon.SkipFinalizer())...)
+	return recon.Setup(tpl, name, mgr, asActor(observer), append(applyOpts, recon.SkipFinalizer(), recon.SkipStatusSync())...)
 }
 
 type Observer[T client.Object] interface {
