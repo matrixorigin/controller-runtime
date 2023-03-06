@@ -96,22 +96,41 @@ func (c *Context[T]) List(objList client.ObjectList, opts ...client.ListOption) 
 // Patch patches the mutation by mutateFn to the spec of given obj
 // an error would be raised if mutateFn changed anything immutable (e.g. namespace / name)
 func (c *Context[T]) Patch(obj client.Object, mutateFn func() error, opts ...client.PatchOption) error {
+	patch, err := c.buildPatch(obj, mutateFn)
+	if patch == nil {
+		return err
+	}
+	return c.Client.Patch(c, obj, *patch, opts...)
+}
+
+// Patch patches the mutation by mutateFn to the status of given obj
+// an error would be raised if mutateFn changed anything immutable (e.g. namespace / name)
+func (c *Context[T]) PatchStatus(obj client.Object, mutateFn func() error, opts ...client.SubResourcePatchOption) error {
+	patch, err := c.buildPatch(obj, mutateFn)
+	if patch == nil {
+		return err
+	}
+	return c.Client.Status().Patch(c, obj, *patch, opts...)
+}
+
+func (c *Context[T]) buildPatch(obj client.Object, mutateFn func() error) (*client.Patch, error) {
 	key := client.ObjectKeyFromObject(obj)
 	if err := c.Get(client.ObjectKeyFromObject(obj), obj); err != nil {
-		return err
+		return nil, err
 	}
 	before := obj.DeepCopyObject().(client.Object)
 	if err := mutateFn(); err != nil {
-		return err
+		return nil, err
 	}
 	if newKey := client.ObjectKeyFromObject(obj); key != newKey {
-		return fmt.Errorf("MutateFn cannot mutate object name and/or object namespace")
+		return nil, fmt.Errorf("MutateFn cannot mutate object name and/or object namespace")
 	}
 	if reflect.DeepEqual(before, obj) {
 		// no change to patch
-		return nil
+		return nil, nil
 	}
-	return c.Client.Patch(c, obj, client.MergeFrom(before), opts...)
+	p := client.MergeFrom(before)
+	return &p, nil
 }
 
 // CreateOwned create the given object with an OwnerReference to the currently reconciling
