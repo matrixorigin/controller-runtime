@@ -25,7 +25,7 @@ var _ client.Client = &Client{}
 // Client proxy the real client.Client and enables us to mock individual funcs
 // when necessary
 type Client struct {
-	Client          client.Client
+	client.Client
 	MockGet         MockGetFn
 	MockList        MockListFn
 	MockCreate      MockCreateFn
