@@ -74,7 +74,7 @@ func (c *Context[T]) Get(objKey client.ObjectKey, obj client.Object) error {
 	return c.Client.Get(c, objKey, obj)
 }
 
-// Update update the spec of the given obj
+// Update the spec of the given obj
 func (c *Context[T]) Update(obj client.Object, opts ...client.UpdateOption) error {
 	return c.Client.Update(c, obj, opts...)
 }

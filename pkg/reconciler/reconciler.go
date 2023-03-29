@@ -93,12 +93,12 @@ func WithEventRecorder(recorder record.EventRecorder) ApplyOption {
 	return func(o *options) { o.recorder = recorder }
 }
 
-// WithEventRecorder set the logger of the reconciler
+// WithLogger set the logger of the reconciler
 func WithLogger(logger logr.Logger) ApplyOption {
 	return func(o *options) { o.logger = logger }
 }
 
-// WithEventRecorder set the controller options of the reconciler
+// WithControllerOptions set the controller options of the reconciler
 func WithControllerOptions(opts controller.Options) ApplyOption {
 	return func(o *options) { o.ctrlOpts = opts }
 }
@@ -207,6 +207,10 @@ func (r *Reconciler[T]) Reconcile(goCtx context.Context, req recon.Request) (rec
 
 	// ensure finalizer before any action to guarantee completeness of finalizing
 	if err := r.ensureFinalizer(ctx, obj); err != nil {
+		if kerr.IsConflict(err) {
+			ctx.Log.V(Debug).Info("add finalizer conflict error", "detail", err.Error())
+			return requeue, nil
+		}
 		return none, errors.Wrap(err, "error adding finalizer to object")
 	}
 
@@ -227,6 +231,10 @@ func (r *Reconciler[T]) Reconcile(goCtx context.Context, req recon.Request) (rec
 			cond.SetCondition(synced(true))
 		}
 		if err := r.updateStatus(ctx); err != nil {
+			if kerr.IsConflict(err) {
+				log.V(Debug).Info("update status conflict, requeue", "detail", err.Error())
+				return requeue, nil
+			}
 			return none, err
 		}
 		return forget, nil
@@ -236,6 +244,10 @@ func (r *Reconciler[T]) Reconcile(goCtx context.Context, req recon.Request) (rec
 		cond.SetCondition(synced(false))
 	}
 	if err := r.updateStatus(ctx); err != nil {
+		if kerr.IsConflict(err) {
+			log.V(Debug).Info("update status conflict, requeue", "detail", err.Error())
+			return requeue, nil
+		}
 		return none, err
 	}
 
@@ -254,29 +266,39 @@ func (r *Reconciler[T]) updateStatus(ctx *Context[T]) error {
 	return ctx.UpdateStatus(ctx.Obj)
 }
 
-func (r *Reconciler[T]) processActorError(ctx *Context[T], err error) (recon.Result, error) {
+func (r *Reconciler[T]) processActorError(ctx *Context[T], actorErr error) (recon.Result, error) {
 	// 1. record error details
 	obj := ctx.Obj
 	if cond, isConditional := any(obj).(Conditional); isConditional {
 		cond.SetCondition(metav1.Condition{
 			Type:    ConditionTypeSynced,
 			Status:  metav1.ConditionFalse,
-			Message: fmt.Sprintf("Last error: %s", err.Error()),
+			Message: fmt.Sprintf("Last error: %s", actorErr.Error()),
 		})
 	}
 	if err := r.updateStatus(ctx); err != nil {
+		if kerr.IsConflict(err) {
+			ctx.Log.V(Debug).Info("update status conflict, requeue", "detail", err.Error())
+			return requeue, nil
+		}
 		return none, err
 	}
 
 	// 2. check whether resync is requested
-	if resync, ok := err.(*ReSync); ok {
+	if resync, ok := actorErr.(*ReSync); ok {
 		// resync error
 		ctx.Log.V(Debug).Info("actor request resync", "detail", resync.Error())
 		return recon.Result{Requeue: true, RequeueAfter: resync.RequeueAfter}, nil
 	}
+
+	// 3. for conflict error, just log and requeue
+	if kerr.IsConflict(actorErr) {
+		ctx.Log.V(Debug).Info("update conflict in reconcile, requeue", "detail", actorErr.Error())
+		return requeue, nil
+	}
 	// other errors
-	ctx.Event.EmitEventGeneric(reconcileFail, "failed calling actions", err)
-	return none, errors.Wrap(err, "error calling actions")
+	ctx.Event.EmitEventGeneric(reconcileFail, "failed calling actions", actorErr)
+	return none, errors.Wrap(actorErr, "error calling actions")
 }
 
 func (r *Reconciler[T]) waitDependencies(ctx *Context[T], dt Dependant) (bool, error) {
