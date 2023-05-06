@@ -16,6 +16,7 @@ package fake
 import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"time"
 )
 
 func ReadyPod(meta metav1.ObjectMeta) *corev1.Pod {
@@ -23,8 +24,10 @@ func ReadyPod(meta metav1.ObjectMeta) *corev1.Pod {
 		ObjectMeta: meta,
 		Status: corev1.PodStatus{
 			Conditions: []corev1.PodCondition{{
-				Type:   corev1.PodReady,
-				Status: corev1.ConditionTrue,
+				Type:               corev1.PodReady,
+				Status:             corev1.ConditionTrue,
+				LastProbeTime:      metav1.Time{Time: time.Now()},
+				LastTransitionTime: metav1.Time{Time: time.Now().Add(-24 * time.Hour)},
 			}},
 		},
 	}
@@ -35,8 +38,10 @@ func UnreadyPod(meta metav1.ObjectMeta) *corev1.Pod {
 		ObjectMeta: meta,
 		Status: corev1.PodStatus{
 			Conditions: []corev1.PodCondition{{
-				Type:   corev1.PodReady,
-				Status: corev1.ConditionFalse,
+				Type:               corev1.PodReady,
+				Status:             corev1.ConditionFalse,
+				LastProbeTime:      metav1.Time{Time: time.Now()},
+				LastTransitionTime: metav1.Time{Time: time.Now().Add(-24 * time.Hour)},
 			}},
 		},
 	}
