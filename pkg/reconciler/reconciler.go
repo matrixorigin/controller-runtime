@@ -84,6 +84,8 @@ type options struct {
 	skipFinalizer bool
 	// skipStatusSync indicates the reconciler can skip sync status
 	skipStatusSync bool
+
+	pred *predicate.Predicate
 }
 
 type ApplyOption func(*options)
@@ -106,6 +108,10 @@ func WithControllerOptions(opts controller.Options) ApplyOption {
 // WithBuildFn allows customizing reconciler.Builder defined the controller-runtime
 func WithBuildFn(buildFn func(*builder.Builder)) ApplyOption {
 	return func(o *options) { o.buildFn = buildFn }
+}
+
+func WithPredicate(pred predicate.Predicate) ApplyOption {
+	return func(o *options) { o.pred = &pred }
 }
 
 func SkipFinalizer() ApplyOption {
@@ -141,11 +147,18 @@ func Setup[T client.Object](tpl T, name string, mgr ctrl.Manager, actor Actor[T]
 		opts.buildFn(bld)
 	}
 	// ignore status change
-	filter := predicate.Or(
-		predicate.GenerationChangedPredicate{},
-		predicate.LabelChangedPredicate{},
-		predicate.AnnotationChangedPredicate{},
-	)
+	var filter predicate.Predicate
+	if opts.pred != nil {
+		filter = *opts.pred
+	} else {
+		// default preds
+		filter = predicate.Or(
+			predicate.GenerationChangedPredicate{},
+			predicate.LabelChangedPredicate{},
+			predicate.AnnotationChangedPredicate{},
+		)
+	}
+
 	return bld.Named(r.name).
 		WithOptions(r.ctrlOpts).
 		For(obj, builder.WithPredicates(filter)).
