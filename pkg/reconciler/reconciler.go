@@ -248,7 +248,7 @@ func (r *Reconciler[T]) Reconcile(goCtx context.Context, req recon.Request) (rec
 				log.V(Debug).Info("update status conflict, requeue", "detail", err.Error())
 				return requeue, nil
 			}
-			return none, err
+			return none, errors.Wrap(err, "error updating status")
 		}
 		return forget, nil
 	}
@@ -261,7 +261,7 @@ func (r *Reconciler[T]) Reconcile(goCtx context.Context, req recon.Request) (rec
 			log.V(Debug).Info("update status conflict, requeue", "detail", err.Error())
 			return requeue, nil
 		}
-		return none, err
+		return none, errors.Wrap(err, "error updating status")
 	}
 
 	log.V(Debug).Info("execute reconcile action", "action", action)
@@ -294,7 +294,7 @@ func (r *Reconciler[T]) processActorError(ctx *Context[T], actorErr error) (reco
 			ctx.Log.V(Debug).Info("update status conflict, requeue", "detail", err.Error())
 			return requeue, nil
 		}
-		return none, err
+		return none, errors.Wrap(err, "error updating status")
 	}
 
 	// 2. check whether resync is requested
