@@ -23,19 +23,19 @@ import (
 
 type Handler[T runtime.Object] interface {
 	Default(obj T)
-	ValidateCreate(obj T) error
-	ValidateUpdate(oldObj, newObj T) error
-	ValidateDelete(obj T) error
+	ValidateCreate(obj T) (warnings admission.Warnings, err error)
+	ValidateUpdate(oldObj, newObj T) (warnings admission.Warnings, err error)
+	ValidateDelete(obj T) (warnings admission.Warnings, err error)
 	GetObject() T
 }
 
 // RegisterWebhook regist a webhook.Handler to the webhook server
-func RegisterWebhook[T runtime.Object](server *ctrlwebhook.Server, resourcePath string, handler Handler[T]) {
+func RegisterWebhook[T runtime.Object](server ctrlwebhook.Server, resourcePath string, handler Handler[T], s *runtime.Scheme) {
 	path := strings.TrimSuffix(resourcePath, "/")
 	w := &wrapper[T]{handler: handler}
-	dw := admission.WithCustomDefaulter(handler.GetObject(), w)
+	dw := admission.WithCustomDefaulter(s, handler.GetObject(), w)
 	server.Register(path+"/defaulting", dw)
-	vw := admission.WithCustomValidator(handler.GetObject(), w)
+	vw := admission.WithCustomValidator(s, handler.GetObject(), w)
 	server.Register(path+"/validating", vw)
 }
 
@@ -48,14 +48,14 @@ func (w *wrapper[T]) Default(_ context.Context, obj runtime.Object) error {
 	return nil
 }
 
-func (w *wrapper[T]) ValidateCreate(_ context.Context, obj runtime.Object) error {
+func (w *wrapper[T]) ValidateCreate(_ context.Context, obj runtime.Object) (warnings admission.Warnings, err error) {
 	return w.handler.ValidateCreate(obj.(T))
 }
 
-func (w *wrapper[T]) ValidateUpdate(_ context.Context, oldObj, newObj runtime.Object) error {
+func (w *wrapper[T]) ValidateUpdate(_ context.Context, oldObj, newObj runtime.Object) (warnings admission.Warnings, err error) {
 	return w.handler.ValidateUpdate(oldObj.(T), newObj.(T))
 }
 
-func (w *wrapper[T]) ValidateDelete(_ context.Context, obj runtime.Object) error {
+func (w *wrapper[T]) ValidateDelete(_ context.Context, obj runtime.Object) (warnings admission.Warnings, err error) {
 	return w.handler.ValidateDelete(obj.(T))
 }
