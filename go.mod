@@ -3,6 +3,7 @@ module github.com/matrixorigin/controller-runtime
 go 1.19
 
 require (
+	github.com/go-errors/errors v1.5.1
 	github.com/go-logr/logr v1.2.4
 	github.com/golang/mock v1.5.0
 	github.com/google/go-cmp v0.5.9
