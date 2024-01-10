@@ -32,6 +32,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	recon "sigs.k8s.io/controller-runtime/pkg/reconcile"
 
+	goerrors "github.com/go-errors/errors"
 	"github.com/go-logr/logr"
 	"github.com/matrixorigin/controller-runtime/pkg/util"
 	"github.com/pkg/errors"
@@ -309,6 +310,12 @@ func (r *Reconciler[T]) processActorError(ctx *Context[T], actorErr error) (reco
 		ctx.Log.V(Debug).Info("update conflict in reconcile, requeue", "detail", actorErr.Error())
 		return requeue, nil
 	}
+
+	// 4. print error stack if using error package "github.com/go-errors/errors"
+	if stackErr, ok := actorErr.(*goerrors.Error); ok {
+		ctx.Log.Error(actorErr, stackErr.ErrorStack())
+	}
+
 	// other errors
 	ctx.Event.EmitEventGeneric(reconcileFail, "failed calling actions", actorErr)
 	return none, errors.Wrap(actorErr, "error calling actions")
