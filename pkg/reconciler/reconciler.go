@@ -343,6 +343,10 @@ func (r *Reconciler[T]) finalize(ctx *Context[T]) (recon.Result, error) {
 	}
 	done, err := r.actor.Finalize(ctx)
 	if err != nil {
+		// print error stack if using error package "github.com/go-errors/errors"
+		if stackErr, ok := err.(*goerrors.Error); ok {
+			ctx.Log.Error(err, stackErr.ErrorStack())
+		}
 		ctx.Event.EmitEventGeneric(finalizeFail, "failed to finalize object", err)
 		return none, errors.Wrap(err, "error finalizing object")
 	}
