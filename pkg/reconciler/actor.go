@@ -103,7 +103,7 @@ func (c *Context[T]) Patch(obj client.Object, mutateFn func() error, opts ...cli
 	return c.Client.Patch(c, obj, *patch, opts...)
 }
 
-// Patch patches the mutation by mutateFn to the status of given obj
+// PatchStatus patches the mutation by mutateFn to the status of given obj
 // an error would be raised if mutateFn changed anything immutable (e.g. namespace / name)
 func (c *Context[T]) PatchStatus(obj client.Object, mutateFn func() error, opts ...client.SubResourcePatchOption) error {
 	patch, err := c.buildPatch(obj, mutateFn)
@@ -129,7 +129,7 @@ func (c *Context[T]) buildPatch(obj client.Object, mutateFn func() error) (*clie
 		// no change to patch
 		return nil, nil
 	}
-	p := client.MergeFrom(before)
+	p := client.MergeFromWithOptions(before, client.MergeFromWithOptimisticLock{})
 	return &p, nil
 }
 
