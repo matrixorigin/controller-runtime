@@ -32,10 +32,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	recon "sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	goerrors "github.com/go-errors/errors"
+	"github.com/go-errors/errors"
 	"github.com/go-logr/logr"
 	"github.com/matrixorigin/controller-runtime/pkg/util"
-	"github.com/pkg/errors"
 )
 
 const (
@@ -55,16 +54,18 @@ const (
 	Debug        = 4
 	Trace        = 5
 
-	// We don't want to requeue immediately since if the interval between two reconcile loops is smaller than the
+	// We don't want to retry immediately since if the interval between two reconcile loops is smaller than the
 	// list-and-watch cache lag, there is wasted operations. This is does not affect correctness but do introduce
 	// unnecessary load on kube-apiserver.
 	defaultRequeueAfter = 2 * time.Second
 )
 
 var (
-	requeue = recon.Result{Requeue: true, RequeueAfter: defaultRequeueAfter}
-	forget  = recon.Result{Requeue: false}
-	none    = recon.Result{Requeue: true}
+	// retry means retry after certain period
+	retry  = recon.Result{Requeue: true, RequeueAfter: defaultRequeueAfter}
+	forget = recon.Result{Requeue: false}
+	// backoff means exponential backoff
+	backoff = recon.Result{Requeue: true}
 )
 
 type Reconciler[T client.Object] struct {
@@ -191,7 +192,7 @@ func (r *Reconciler[T]) Reconcile(goCtx context.Context, req recon.Request) (rec
 	obj := r.newT()
 	if err := r.Get(goCtx, req.NamespacedName, obj); err != nil {
 		// forget the object if it does not exist
-		return forget, errors.Wrap(util.Ignore(kerr.IsNotFound, err), "failed to get object")
+		return forget, errors.Wrap(util.Ignore(kerr.IsNotFound, err), 0)
 	}
 	ctx := &Context[T]{
 		Context: goCtx,
@@ -210,11 +211,11 @@ func (r *Reconciler[T]) Reconcile(goCtx context.Context, req recon.Request) (rec
 		depHolder := obj.DeepCopyObject().(Dependant)
 		ready, err := r.waitDependencies(ctx, depHolder)
 		if err != nil {
-			return none, errors.Wrap(err, "error waiting dependencies to be ready")
+			return backoff, errors.WrapPrefix(err, "error waiting dependencies to be ready", 0)
 		}
 		if !ready {
-			ctx.Log.Info("dependency not ready, requeue")
-			return requeue, nil
+			ctx.Log.Info("dependency not ready, retry")
+			return retry, nil
 		}
 		ctx.Dep = depHolder.(T)
 	}
@@ -223,9 +224,9 @@ func (r *Reconciler[T]) Reconcile(goCtx context.Context, req recon.Request) (rec
 	if err := r.ensureFinalizer(ctx, obj); err != nil {
 		if kerr.IsConflict(err) {
 			ctx.Log.V(Debug).Info("add finalizer conflict error", "detail", err.Error())
-			return requeue, nil
+			return retry, nil
 		}
-		return none, errors.Wrap(err, "error adding finalizer to object")
+		return backoff, errors.Wrap(err, 0)
 	}
 
 	action, err := r.actor.Observe(ctx)
@@ -246,10 +247,10 @@ func (r *Reconciler[T]) Reconcile(goCtx context.Context, req recon.Request) (rec
 		}
 		if err := r.updateStatus(ctx); err != nil {
 			if kerr.IsConflict(err) {
-				log.V(Debug).Info("update status conflict, requeue", "detail", err.Error())
-				return requeue, nil
+				log.V(Debug).Info("update status conflict, retry", "detail", err.Error())
+				return retry, nil
 			}
-			return none, errors.Wrap(err, "error updating status")
+			return backoff, errors.Wrap(err, 0)
 		}
 		return forget, nil
 	}
@@ -259,18 +260,18 @@ func (r *Reconciler[T]) Reconcile(goCtx context.Context, req recon.Request) (rec
 	}
 	if err := r.updateStatus(ctx); err != nil {
 		if kerr.IsConflict(err) {
-			log.V(Debug).Info("update status conflict, requeue", "detail", err.Error())
-			return requeue, nil
+			log.V(Debug).Info("update status conflict, retry", "detail", err.Error())
+			return retry, nil
 		}
-		return none, errors.Wrap(err, "error updating status")
+		return backoff, errors.Wrap(err, 0)
 	}
 
 	log.V(Debug).Info("execute reconcile action", "action", action)
 	if err := action(ctx); err != nil {
 		return r.processActorError(ctx, err)
 	}
-	// Always requeue after a successful action to check what should be done next
-	return requeue, nil
+	// Always retry after a successful action to check what should be done next
+	return retry, nil
 }
 
 func (r *Reconciler[T]) updateStatus(ctx *Context[T]) error {
@@ -292,33 +293,34 @@ func (r *Reconciler[T]) processActorError(ctx *Context[T], actorErr error) (reco
 	}
 	if err := r.updateStatus(ctx); err != nil {
 		if kerr.IsConflict(err) {
-			ctx.Log.V(Debug).Info("update status conflict, requeue", "detail", err.Error())
-			return requeue, nil
+			ctx.Log.V(Debug).Info("update status conflict, retry", "detail", err.Error())
+			return retry, nil
 		}
-		return none, errors.Wrap(err, "error updating status")
+		return retry, nil
 	}
 
 	// 2. check whether resync is requested
-	if resync, ok := actorErr.(*ReSync); ok {
+	var resync *ReSync
+	if errors.As(actorErr, &resync) {
 		// resync error
 		ctx.Log.V(Debug).Info("actor request resync", "detail", resync.Error())
 		return recon.Result{Requeue: true, RequeueAfter: resync.RequeueAfter}, nil
 	}
 
-	// 3. for conflict error, just log and requeue
+	// 3. for conflict error, just log and retry
 	if kerr.IsConflict(actorErr) {
-		ctx.Log.V(Debug).Info("update conflict in reconcile, requeue", "detail", actorErr.Error())
-		return requeue, nil
+		ctx.Log.V(Debug).Info("update conflict in reconcile, retry", "detail", actorErr.Error())
+		return retry, nil
 	}
 
 	// 4. print error stack if using error package "github.com/go-errors/errors"
-	if stackErr, ok := actorErr.(*goerrors.Error); ok {
+	var stackErr *errors.Error
+	if errors.As(actorErr, &stackErr) {
 		ctx.Log.Error(actorErr, stackErr.ErrorStack())
 	}
-
 	// other errors
 	ctx.Event.EmitEventGeneric(reconcileFail, "failed calling actions", actorErr)
-	return none, errors.Wrap(actorErr, "error calling actions")
+	return backoff, nil
 }
 
 func (r *Reconciler[T]) waitDependencies(ctx *Context[T], dt Dependant) (bool, error) {
@@ -344,20 +346,21 @@ func (r *Reconciler[T]) finalize(ctx *Context[T]) (recon.Result, error) {
 	done, err := r.actor.Finalize(ctx)
 	if err != nil {
 		// print error stack if using error package "github.com/go-errors/errors"
-		if stackErr, ok := err.(*goerrors.Error); ok {
+		var stackErr *errors.Error
+		if errors.As(err, &stackErr) {
 			ctx.Log.Error(err, stackErr.ErrorStack())
 		}
 		ctx.Event.EmitEventGeneric(finalizeFail, "failed to finalize object", err)
-		return none, errors.Wrap(err, "error finalizing object")
+		return backoff, nil
 	}
 	if !done {
-		ctx.Log.Info("does not complete finalizing, requeue")
-		return requeue, nil
+		ctx.Log.Info("does not complete finalizing, retry")
+		return retry, nil
 	}
 	ctx.Log.Info("resource finalizing complete, remove finalizer")
 	if err := r.removeFinalizer(ctx, ctx.Obj); err != nil {
 		ctx.Event.EmitEventGeneric(finalizeFail, "failed to remove finalizer", err)
-		return requeue, errors.Wrap(err, "error removing finalizer")
+		return retry, nil
 	}
 	// object finalized and there is no more work for current reconciler, forget it
 	return forget, nil
