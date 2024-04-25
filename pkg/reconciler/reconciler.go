@@ -313,14 +313,14 @@ func (r *Reconciler[T]) processActorError(ctx *Context[T], actorErr error) (reco
 		return retry, nil
 	}
 
+	ctx.Event.EmitEventGeneric(reconcileFail, "failed calling actions", actorErr)
 	// 4. print error stack if using error package "github.com/go-errors/errors"
 	var stackErr *errors.Error
 	if errors.As(actorErr, &stackErr) {
 		ctx.Log.Error(actorErr, stackErr.ErrorStack())
+		return backoff, nil
 	}
-	// other errors
-	ctx.Event.EmitEventGeneric(reconcileFail, "failed calling actions", actorErr)
-	return backoff, nil
+	return backoff, actorErr
 }
 
 func (r *Reconciler[T]) waitDependencies(ctx *Context[T], dt Dependant) (bool, error) {
@@ -347,11 +347,12 @@ func (r *Reconciler[T]) finalize(ctx *Context[T]) (recon.Result, error) {
 	if err != nil {
 		// print error stack if using error package "github.com/go-errors/errors"
 		var stackErr *errors.Error
+		ctx.Event.EmitEventGeneric(finalizeFail, "failed to finalize object", err)
 		if errors.As(err, &stackErr) {
 			ctx.Log.Error(err, stackErr.ErrorStack())
+			return backoff, nil
 		}
-		ctx.Event.EmitEventGeneric(finalizeFail, "failed to finalize object", err)
-		return backoff, nil
+		return backoff, err
 	}
 	if !done {
 		ctx.Log.Info("does not complete finalizing, retry")
