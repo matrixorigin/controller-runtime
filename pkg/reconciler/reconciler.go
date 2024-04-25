@@ -192,7 +192,7 @@ func (r *Reconciler[T]) Reconcile(goCtx context.Context, req recon.Request) (rec
 	obj := r.newT()
 	if err := r.Get(goCtx, req.NamespacedName, obj); err != nil {
 		// forget the object if it does not exist
-		return forget, errors.Wrap(util.Ignore(kerr.IsNotFound, err), 0)
+		return forget, util.Ignore(kerr.IsNotFound, err)
 	}
 	ctx := &Context[T]{
 		Context: goCtx,
