@@ -24,7 +24,7 @@ type ReSync struct {
 }
 
 func (e *ReSync) Error() string {
-	return fmt.Sprintf("reconcile error: %s, requeue after %s", e.Message, e.RequeueAfter)
+	return fmt.Sprintf("reconcile error: %s, retry after %s", e.Message, e.RequeueAfter)
 }
 
 func ErrReSync(msg string, requeueAfter ...time.Duration) *ReSync {
