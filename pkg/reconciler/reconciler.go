@@ -282,6 +282,10 @@ func (r *Reconciler[T]) updateStatus(ctx *Context[T]) error {
 }
 
 func (r *Reconciler[T]) processActorError(ctx *Context[T], actorErr error) (recon.Result, error) {
+	if IsNil(actorErr) {
+		ctx.Log.Error(actorErr, "nil error with interface is returned from reconciler")
+		return backoff, nil
+	}
 	// 1. record error details
 	obj := ctx.Obj
 	if cond, isConditional := any(obj).(Conditional); isConditional {
@@ -345,6 +349,10 @@ func (r *Reconciler[T]) finalize(ctx *Context[T]) (recon.Result, error) {
 	}
 	done, err := r.actor.Finalize(ctx)
 	if err != nil {
+		if IsNil(err) {
+			ctx.Log.Error(err, "nil error with interface is returned from reconciler")
+			return backoff, nil
+		}
 		// print error stack if using error package "github.com/go-errors/errors"
 		var stackErr *errors.Error
 		ctx.Event.EmitEventGeneric(finalizeFail, "failed to finalize object", err)
