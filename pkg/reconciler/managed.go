@@ -116,10 +116,19 @@ func IsReady(c Conditional) bool {
 	return false
 }
 
+// deprecated: use IsSyncedWithLatestGeneration instead
 func IsSynced(c Conditional) bool {
 	cond, ok := GetCondition(c, ConditionTypeSynced)
 	if ok {
 		return cond.Status == metav1.ConditionTrue
+	}
+	return false
+}
+
+func IsSyncedWithLatestGeneration(c Conditional, latest int64) bool {
+	cond, ok := GetCondition(c, ConditionTypeSynced)
+	if ok {
+		return cond.Status == metav1.ConditionTrue && cond.ObservedGeneration >= latest
 	}
 	return false
 }
