@@ -243,7 +243,7 @@ func (r *Reconciler[T]) Reconcile(goCtx context.Context, req recon.Request) (rec
 		ctx.Event.EmitEventGeneric(reconcileSuccess, "object is synced", nil)
 
 		if isConditional {
-			cond.SetCondition(synced(true))
+			cond.SetCondition(synced(true, obj.GetGeneration()))
 		}
 		if err := r.updateStatus(ctx); err != nil {
 			if kerr.IsConflict(err) {
@@ -256,7 +256,7 @@ func (r *Reconciler[T]) Reconcile(goCtx context.Context, req recon.Request) (rec
 	}
 
 	if isConditional {
-		cond.SetCondition(synced(false))
+		cond.SetCondition(synced(false, obj.GetGeneration()))
 	}
 	if err := r.updateStatus(ctx); err != nil {
 		if kerr.IsConflict(err) {
@@ -290,9 +290,10 @@ func (r *Reconciler[T]) processActorError(ctx *Context[T], actorErr error) (reco
 	obj := ctx.Obj
 	if cond, isConditional := any(obj).(Conditional); isConditional {
 		cond.SetCondition(metav1.Condition{
-			Type:    ConditionTypeSynced,
-			Status:  metav1.ConditionFalse,
-			Message: fmt.Sprintf("Last error: %s", actorErr.Error()),
+			Type:               ConditionTypeSynced,
+			Status:             metav1.ConditionFalse,
+			ObservedGeneration: obj.GetGeneration(),
+			Message:            fmt.Sprintf("Last error: %s", actorErr.Error()),
 		})
 	}
 	if err := r.updateStatus(ctx); err != nil {
@@ -433,17 +434,19 @@ func (c *Reconciler[T]) ensureFinalizer(ctx *Context[T], obj T) error {
 	return nil
 }
 
-func synced(b bool) metav1.Condition {
+func synced(b bool, generation int64) metav1.Condition {
 	if b {
 		return metav1.Condition{
-			Type:    ConditionTypeSynced,
-			Status:  metav1.ConditionTrue,
-			Message: "the object is synced",
+			Type:               ConditionTypeSynced,
+			ObservedGeneration: generation,
+			Status:             metav1.ConditionTrue,
+			Message:            "the object is synced",
 		}
 	}
 	return metav1.Condition{
-		Type:    ConditionTypeSynced,
-		Status:  metav1.ConditionFalse,
-		Message: "the object is reconciling",
+		Type:               ConditionTypeSynced,
+		ObservedGeneration: generation,
+		Status:             metav1.ConditionFalse,
+		Message:            "the object is reconciling",
 	}
 }
