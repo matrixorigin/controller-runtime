@@ -96,7 +96,10 @@ func (c *Client) Update(ctx context.Context, obj client.Object, opts ...client.U
 }
 
 func (c *Client) Patch(ctx context.Context, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
-	return c.MockPatch(ctx, obj, patch, opts...)
+	if c.MockPatch != nil {
+		return c.MockPatch(ctx, obj, patch, opts...)
+	}
+	return c.Client.Patch(ctx, obj, patch, opts...)
 }
 
 type MockGetFn func(ctx context.Context, key client.ObjectKey, obj runtime.Object, opts ...client.GetOption) error
