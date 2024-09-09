@@ -94,7 +94,8 @@ func (c *Context[T]) List(objList client.ObjectList, opts ...client.ListOption) 
 }
 
 // Patch patches the mutation by mutateFn to the spec of given obj
-// an error would be raised if mutateFn changed anything immutable (e.g. namespace / name)
+// an error would be raised if mutateFn changed anything immutable (e.g. namespace / name).
+// Changes will be merged with current object, optimisticLock is enforced.
 func (c *Context[T]) Patch(obj client.Object, mutateFn func() error, opts ...client.PatchOption) error {
 	patch, err := c.buildPatch(obj, mutateFn)
 	if patch == nil {
@@ -115,9 +116,6 @@ func (c *Context[T]) PatchStatus(obj client.Object, mutateFn func() error, opts 
 
 func (c *Context[T]) buildPatch(obj client.Object, mutateFn func() error) (*client.Patch, error) {
 	key := client.ObjectKeyFromObject(obj)
-	if err := c.Get(client.ObjectKeyFromObject(obj), obj); err != nil {
-		return nil, err
-	}
 	before := obj.DeepCopyObject().(client.Object)
 	if err := mutateFn(); err != nil {
 		return nil, err
