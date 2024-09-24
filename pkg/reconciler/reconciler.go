@@ -84,6 +84,8 @@ type options struct {
 	ctrlOpts controller.Options
 	// skipFinalizer indicates the reconciler can skip processing finalizer
 	skipFinalizer bool
+	// skipPatchFinalizer indicates reconciler will handle CR deletion but do not patch finalizer
+	skipPatchFinalizer bool
 	// skipStatusSync indicates the reconciler can skip sync status
 	skipStatusSync bool
 
@@ -118,6 +120,10 @@ func WithPredicate(pred predicate.Predicate) ApplyOption {
 
 func SkipFinalizer() ApplyOption {
 	return func(o *options) { o.skipFinalizer = true }
+}
+
+func SkipPatchFinalizer() ApplyOption {
+	return func(o *options) { o.skipPatchFinalizer = true }
 }
 
 func SkipStatusSync() ApplyOption {
@@ -343,7 +349,7 @@ func (r *Reconciler[T]) waitDependencies(ctx *Context[T], dt Dependant) (bool, e
 }
 
 func (r *Reconciler[T]) finalize(ctx *Context[T]) (recon.Result, error) {
-	if !r.hasFinalizer(ctx.Obj) {
+	if !r.skipPatchFinalizer && !r.hasFinalizer(ctx.Obj) {
 		// Finalizer work of current reconciler is done or not needed, the object might
 		// wait other reconcilers to complete there finalizer work, ignore.
 		return forget, nil
@@ -418,6 +424,9 @@ func (c *Reconciler[T]) hasFinalizer(obj T) bool {
 }
 
 func (c *Reconciler[T]) removeFinalizer(ctx *Context[T], obj T) error {
+	if c.skipPatchFinalizer {
+		return nil
+	}
 	if controllerutil.RemoveFinalizer(obj, c.finalizer()) {
 		return ctx.Update(obj)
 	}
@@ -426,6 +435,9 @@ func (c *Reconciler[T]) removeFinalizer(ctx *Context[T], obj T) error {
 
 func (c *Reconciler[T]) ensureFinalizer(ctx *Context[T], obj T) error {
 	if c.skipFinalizer {
+		return nil
+	}
+	if c.skipPatchFinalizer {
 		return nil
 	}
 	if controllerutil.AddFinalizer(obj, c.finalizer()) {
