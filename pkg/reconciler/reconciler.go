@@ -17,11 +17,12 @@ package reconciler
 import (
 	"context"
 	"fmt"
+	"time"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/strings/slices"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
-	"time"
 
 	kerr "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -137,7 +138,7 @@ func SkipStatusSync() ApplyOption {
 func Setup[T client.Object](tpl T, name string, mgr ctrl.Manager, actor Actor[T], applyOpts ...ApplyOption) error {
 	opts := &options{
 		recorder: mgr.GetEventRecorderFor(name),
-		logger:   mgr.GetLogger(),
+		logger:   mgr.GetLogger().WithValues("controller", name),
 	}
 	for _, applyOpt := range applyOpts {
 		applyOpt(opts)
