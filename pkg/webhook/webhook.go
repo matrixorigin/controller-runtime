@@ -35,8 +35,8 @@ type Handler[T runtime.Object] interface {
 // ExtendedHandler is a handler that can mutate on create and update
 // it works after the defaulting
 type ExtendedHandler[T runtime.Object] interface {
-	MutateOnCreate(ctx context.Context, obj T) (err error)
-	MutateOnUpdate(ctx context.Context, oldObj, newObj T) (err error)
+	MutateOnCreate(obj T) (err error)
+	MutateOnUpdate(oldObj, newObj T) (err error)
 }
 
 // RegisterWebhook regist a webhook.Handler to the webhook server
@@ -70,13 +70,13 @@ func (w *wrapper[T]) Default(ctx context.Context, obj runtime.Object) error {
 		}
 		switch req.AdmissionRequest.Operation {
 		case admissionv1.Create:
-			return w.extendedHandler.MutateOnCreate(ctx, obj.(T))
+			return w.extendedHandler.MutateOnCreate(obj.(T))
 		case admissionv1.Update:
 			oldObj := w.handler.GetObject()
 			if decodeErr := w.decoder.DecodeRaw(req.AdmissionRequest.OldObject, oldObj); decodeErr != nil {
 				return decodeErr
 			}
-			return w.extendedHandler.MutateOnUpdate(ctx, oldObj, obj.(T))
+			return w.extendedHandler.MutateOnUpdate(oldObj, obj.(T))
 		}
 	}
 	return nil
