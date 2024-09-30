@@ -11,14 +11,17 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 package webhook
 
 import (
 	"context"
+	"strings"
+
+	admissionv1 "k8s.io/api/admission/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrlwebhook "sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
-	"strings"
 )
 
 type Handler[T runtime.Object] interface {
@@ -29,10 +32,23 @@ type Handler[T runtime.Object] interface {
 	GetObject() T
 }
 
+// ExtendedHandler is a handler that can mutate on create and update
+// it works after the defaulting
+type ExtendedHandler[T runtime.Object] interface {
+	MutateOnCreate(obj T) (err error)
+	MutateOnUpdate(oldObj, newObj T) (err error)
+}
+
 // RegisterWebhook regist a webhook.Handler to the webhook server
 func RegisterWebhook[T runtime.Object](server ctrlwebhook.Server, resourcePath string, handler Handler[T], s *runtime.Scheme) {
 	path := strings.TrimSuffix(resourcePath, "/")
-	w := &wrapper[T]{handler: handler}
+	w := &wrapper[T]{handler: handler, decoder: admission.NewDecoder(s)}
+
+	// Check if the handler also implements ExtendedHandler
+	if extHandler, ok := handler.(ExtendedHandler[T]); ok {
+		w.extendedHandler = extHandler
+	}
+
 	dw := admission.WithCustomDefaulter(s, handler.GetObject(), w)
 	server.Register(path+"/defaulting", dw)
 	vw := admission.WithCustomValidator(s, handler.GetObject(), w)
@@ -40,11 +56,29 @@ func RegisterWebhook[T runtime.Object](server ctrlwebhook.Server, resourcePath s
 }
 
 type wrapper[T runtime.Object] struct {
-	handler Handler[T]
+	decoder         *admission.Decoder
+	handler         Handler[T]
+	extendedHandler ExtendedHandler[T]
 }
 
-func (w *wrapper[T]) Default(_ context.Context, obj runtime.Object) error {
+func (w *wrapper[T]) Default(ctx context.Context, obj runtime.Object) error {
 	w.handler.Default(obj.(T))
+	if w.extendedHandler != nil {
+		req, err := admission.RequestFromContext(ctx)
+		if err != nil {
+			return err
+		}
+		switch req.AdmissionRequest.Operation {
+		case admissionv1.Create:
+			return w.extendedHandler.MutateOnCreate(obj.(T))
+		case admissionv1.Update:
+			oldObj := w.handler.GetObject()
+			if decodeErr := w.decoder.DecodeRaw(req.AdmissionRequest.OldObject, oldObj); decodeErr != nil {
+				return decodeErr
+			}
+			return w.extendedHandler.MutateOnUpdate(oldObj, obj.(T))
+		}
+	}
 	return nil
 }
 
