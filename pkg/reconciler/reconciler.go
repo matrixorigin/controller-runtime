@@ -100,11 +100,6 @@ func WithEventRecorder(recorder record.EventRecorder) ApplyOption {
 	return func(o *options) { o.recorder = recorder }
 }
 
-// WithLogger set the logger of the reconciler
-func WithLogger(logger logr.Logger) ApplyOption {
-	return func(o *options) { o.logger = logger }
-}
-
 // WithControllerOptions set the controller options of the reconciler
 func WithControllerOptions(opts controller.Options) ApplyOption {
 	return func(o *options) { o.ctrlOpts = opts }
@@ -329,7 +324,7 @@ func (r *Reconciler[T]) processActorError(ctx *Context[T], actorErr error) (reco
 	// 4. print error stack if using error package "github.com/go-errors/errors"
 	var stackErr *errors.Error
 	if errors.As(actorErr, &stackErr) {
-		ctx.Log.Error(actorErr, stackErr.ErrorStack())
+		ctx.Log.Error(actorErr, "error reconciling", "stack", stackErr.ErrorStack())
 		return backoff, nil
 	}
 	return backoff, actorErr
